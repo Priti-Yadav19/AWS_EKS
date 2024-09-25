@@ -10,3 +10,18 @@ spec:
   - port: 80
   selector:
     env: dev
+
+
+    Commands after adding deployment and service yaml files:
+
+    kubectl apply -f ./nginx-svc.yaml
+    kubectl get service
+
+    kubectl apply -f ./nginx-deployment.yaml
+     kubectl get deployment
+
+     kubectl get pod
+     kubectl get node
+     kubectl get rs   (To get replica set)
+     curl <LB_DNS_Name>
+     
