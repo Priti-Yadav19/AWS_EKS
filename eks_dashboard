@@ -1,1 +1,85 @@
 
+Step 1: Install AWS CLI v2
+sudo apt update
+sudo apt install -y unzip curl
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+OR
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+sudo apt install unzip
+unzip awscliv2.zip
+sudo ./aws/install -i /usr/local/aws-cli -b /usr/local/bin --update
+aws configure
+
+Step 2: Install kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x ./kubectl
+sudo mv ./kubectl /usr/local/bin/kubectl
+kubectl version --client
+OR
+curl -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.19.6/2021-01-05/bin/linux/amd64/kubectl
+chmod +x ./kubectl
+sudo mv ./kubectl /usr/local/bin
+kubectl version --short --client
+
+Step 3: Install eksctl
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+sudo mv /tmp/eksctl /usr/local/bin
+eksctl version
+
+Step 4: Setup EKS Cluster
+eksctl create cluster --name three-tier-cluster --region us-west-2 --node-type t2.medium --nodes-min 2 --nodes-max 2
+
+Configure kubectl to interact with EKS cluster:
+aws eks update-kubeconfig --region us-west-2 --name three-tier-cluster
+
+Step 5: Deploy the Kubernetes Dashboard
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+
+Step 6: Get the Access Token
+kubectl -n kubernetes-dashboard create token kubernetes-dashboard
+Copy and save the token in order to login into the dashboard later on.
+
+If unable to get the token in some k8s versions then create secrets manually, as below:
+a) Create a New Service Account for the Dashboard:
+kubectl create serviceaccount dashboard-admin-sa -n kubernetes-dashboard
+
+b) Bind the Service Account to the cluster-admin Role
+kubectl create clusterrolebinding dashboard-admin-sa-binding \
+  --clusterrole=cluster-admin \
+  --serviceaccount=kubernetes-dashboard:dashboard-admin-sa
+
+c) Manually Create a Token for the Service Account
+kubectl -n kubernetes-dashboard create token dashboard-admin-sa
+
+d) token-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dashboard-admin-sa-token
+  namespace: kubernetes-dashboard
+  annotations:
+    kubernetes.io/service-account.name: dashboard-admin-sa
+type: kubernetes.io/service-account-token
+
+e) kubectl apply -f token-secret.yaml
+kubectl -n kubernetes-dashboard describe secret dashboard-admin-sa-token
+
+Step 7: Access the Kubernetes Dashboard
+kubectl proxy
+We can then access the Kubernetes Dashboard at:
+http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/
+
+Step 8: Forward Your Local Machine’s Port to the EC2 Instance:
+On your local machine (not the EC2 instance), run the following command:
+ssh -i /path/to/your/key.pem -L 8001:127.0.0.1:8001 ubuntu@<EC2-Public-IP>
+Replace:
+/path/to/your/key.pem with the path to your private key file.
+<EC2-Public-IP> with your EC2 instance's public IP address.
+Verify the Security Group for EC2, re there is a rule allowing SSH (port 22) access from your IP or open to our range.
+
+Step 9: Cleanup
+To delete the EKS cluster:
+eksctl delete cluster --name three-tier-cluster --region us-west-2
